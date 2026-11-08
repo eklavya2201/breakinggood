@@ -145,6 +145,45 @@ does repositories too.
 - Node 20+. Git on PATH. For site mode, Chrome or Edge installed (or
   `npx playwright install chromium`, or `BREAKINGGOOD_BROWSER=/path/to/chrome`).
 
+## Troubleshooting
+
+**`No Chromium-based browser found. Install Google Chrome or Microsoft Edge, run ...`** (site mode)
+It looks for Chrome, then Edge, then a Playwright Chromium. Install one, or point it at a browser:
+
+```
+npx playwright install chromium
+BREAKINGGOOD_BROWSER=/path/to/chrome npx breakinggood https://example.com
+```
+
+If that path doesn't exist the variable is ignored.
+
+**`Site <host> returned a bot challenge instead of the requested page (matched "...")`** (site mode)
+The site answered with HTTP 403/503, or with a challenge page (Cloudflare's markup, or text like "Just a moment", "Checking your browser", "Access denied", "Verify you are human"). A headless browser can't pass that, so pages behind heavy bot protection won't capture. Try a different page of the site.
+
+**`git is not installed or not on PATH.`** (repo mode)
+Repo mode runs `git clone --depth 1`. Install [git](https://git-scm.com/downloads), open a new terminal and check that `git --version` works.
+
+**`No AI provider configured. Set one of ANTHROPIC_API_KEY, ...`**
+Site mode needs a model. Set one of the keys in [AI providers](#ai-providers) and check with `npx breakinggood providers`. Without a key you can still run:
+
+```
+npx breakinggood https://some-website.com --capture-only   # site mode: screenshots, DOM, API calls; no model
+npx breakinggood https://github.com/someone/some-app --no-ai   # repo mode: heuristics only
+```
+
+**Port already in use**
+breakinggood doesn't pick ports. It starts the project's own dev server and opens the first `localhost` URL that server prints. Some servers (Vite) move to the next free port and breakinggood opens that one. Others fail, for example with `EADDRINUSE`, and breakinggood ends with `process exited with code 1`. Stop whatever holds the port, then run the same command with the same `--dir` again (an existing folder is reused, not cloned again):
+
+```
+lsof -i :3000                    # macOS/Linux: find the PID, then kill <PID>
+netstat -ano | findstr :3000     # Windows: last column is the PID, then taskkill /PID <PID> /F
+```
+
+A site-mode project usually runs its dev server on 5173 and a mock API on 8787.
+
+**Python or Java not found** (`spawn python3 ENOENT`, `spawn mvn ENOENT`; on Windows `"create .venv" exited with code ...`)
+breakinggood runs the project's toolchain but doesn't install it. Python projects use `python3 -m venv .venv` (`python` on Windows). Java projects use the repo's `mvnw`/`gradlew`, or `mvn`/`gradle`. Install Python 3 (on Windows, tick "Add python.exe to PATH") or a JDK with Maven or Gradle, open a new terminal, and check `python --version` (`python3 --version` on macOS/Linux), `java -version` and `mvn -v`.
+
 ## Hacking on it
 
 ```
