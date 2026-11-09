@@ -85,6 +85,14 @@ export function runServer(dir: string, cmd: Command, opts: { open: boolean; know
       process.off("SIGTERM", stop);
       resolve(code ?? 0);
     });
+    // The command couldn't start (e.g. `mvn` isn't installed). Without a handler
+    // Node throws the unhandled 'error' event and prints a stack trace.
+    child.on("error", (err) => {
+      process.off("SIGINT", stop);
+      process.off("SIGTERM", stop);
+      log.err(err.message);
+      resolve(1);
+    });
   });
 }
 
