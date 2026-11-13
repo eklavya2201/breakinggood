@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions & discussion
+    url: https://github.com/eklavya2201/breakinggood/discussions/17
+    about: Ask questions or chat about breakinggood in discussion #17 instead of opening an issue.
