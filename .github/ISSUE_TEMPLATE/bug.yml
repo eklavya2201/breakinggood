@@ -1,0 +1,45 @@
+name: Bug report
+description: Something broke in breakinggood
+labels: [bug]
+body:
+  - type: textarea
+    id: command
+    attributes:
+      label: Command you ran
+      placeholder: node dist/cli.js https://github.com/expressjs/express --scan-only
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: URL
+      placeholder: repo/website URL, or "private"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: Windows 11 / macOS 15 / Ubuntu 24.04
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node version
+      placeholder: node --version
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: breakinggood --version
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Full output
+      description: Paste the complete terminal output.
+    validations:
+      required: true
