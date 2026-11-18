@@ -72,6 +72,7 @@ export interface Capture {
     fontSizes: string[];
     maxWidth: string | null;
     darkMode: boolean;
+    cssVars: Record<string, string>;
   };
   /** Semantic outline: landmarks and headings in order. */
   outline: string[];
@@ -184,6 +185,27 @@ export async function captureSite(url: string, opts: CaptureOptions = {}): Promi
 
     log("reading DOM, styles and tokens…");
     const extracted = await page.evaluate(extractInPage);
+    const rootCssRules = await page.evaluate(() => {
+      const rules: { selectorText: string; declarations: [string, string][] }[] = [];
+      for (const sheet of Array.from(document.styleSheets)) {
+        try {
+          for (const rule of Array.from(sheet.cssRules)) {
+            if (!("selectorText" in rule)) continue;
+            const style = (rule as CSSStyleRule).style;
+            const declarations: [string, string][] = [];
+            for (let i = 0; i < style.length; i++) {
+              const name = style.item(i);
+              declarations.push([name, style.getPropertyValue(name)]);
+            }
+            rules.push({ selectorText: (rule as CSSStyleRule).selectorText, declarations });
+          }
+        } catch {
+          /* cross-origin stylesheets may not expose cssRules */
+        }
+      }
+      return rules;
+    });
+    extracted.tokens.cssVars = extractRootCssVars(rootCssRules);
 
     log("screenshots (desktop + mobile)…");
     const screenshotsDesktop = await tiledScreenshots(page, 1440, 1800, 4);
@@ -257,6 +279,38 @@ function dedupeRequests(reqs: CapturedRequest[]): CapturedRequest[] {
     out.push(r);
   }
   return out.slice(0, 40);
+}
+
+export function extractRootCssVars(
+  rules: { selectorText: string; declarations: [string, string][] }[],
+): Record<string, string> {
+  const vars: Record<string, string> = {};
+  const relevantName = /color|colour|background|brand|primary|secondary|accent|surface|text|radius|size|width|height|spacing|space|gap|padding|margin|font|border/i;
+
+  for (const rule of rules) {
+    const targetsRoot = rule.selectorText.split(",").some((selector) => {
+      const value = selector.trim();
+      return (
+        value === ":root" ||
+        value.startsWith(":root.") ||
+        value.startsWith(":root[") ||
+        value === "html" ||
+        value.startsWith("html.") ||
+        value.startsWith("html[")
+      );
+    });
+    if (!targetsRoot) continue;
+
+    for (const [name, rawValue] of rule.declarations) {
+      if (Object.keys(vars).length >= 40) break;
+      if (!name.startsWith("--") || !relevantName.test(name)) continue;
+      const value = rawValue.trim();
+      if (value) vars[name] = value;
+    }
+    if (Object.keys(vars).length >= 40) break;
+  }
+
+  return vars;
 }
 
 /** Runs inside the page. Must be self-contained (no imports/closures). */
@@ -381,6 +435,7 @@ function extractInPage() {
       fontSizes: top(fontSizes, 8),
       maxWidth: maxWidth && maxWidth !== "none" ? maxWidth : null,
       darkMode: lum < 0.4,
+      cssVars: {} as Record<string, string>,
     },
     outline: outline.slice(0, 60),
     links,

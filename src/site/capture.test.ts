@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CHALLENGE_MARKERS, isChallengePage } from "./capture.js";
+import { CHALLENGE_MARKERS, extractRootCssVars, isChallengePage } from "./capture.js";
 
 test("returns the matched challenge marker from the page title", () => {
   for (const marker of CHALLENGE_MARKERS) {
@@ -32,4 +32,46 @@ test("detects 403 and 503 navigation responses", () => {
 test("does not flag ordinary pages", () => {
   assert.equal(isChallengePage("Example site", "Welcome to our website."), undefined);
   assert.equal(isChallengePage("", ""), undefined);
+});
+
+test("captures relevant custom properties from :root and html rules", () => {
+  const cssVars = extractRootCssVars([
+    {
+      selectorText: ":root, html",
+      declarations: [
+        ["--color-primary", " #2563eb "],
+        ["--brand-500", "#0f172a"],
+        ["--radius", "12px"],
+        ["--font-body", "Inter, sans-serif"],
+        ["--unrelated", "value"],
+      ],
+    },
+    {
+      selectorText: ".card",
+      declarations: [["--color-card", "#ffffff"]],
+    },
+    {
+      selectorText: "html.dark",
+      declarations: [["--background", "#111827"]],
+    },
+  ]);
+
+  assert.deepEqual(cssVars, {
+    "--color-primary": "#2563eb",
+    "--brand-500": "#0f172a",
+    "--radius": "12px",
+    "--font-body": "Inter, sans-serif",
+    "--background": "#111827",
+  });
+});
+
+test("limits captured custom properties to forty entries", () => {
+  const declarations: [string, string][] = Array.from({ length: 45 }, (_, index) => [
+    `--color-${index}`,
+    `#${index.toString(16).padStart(6, "0")}`,
+  ]);
+
+  const cssVars = extractRootCssVars([{ selectorText: ":root", declarations }]);
+
+  assert.equal(Object.keys(cssVars).length, 40);
 });
