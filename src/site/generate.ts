@@ -69,6 +69,7 @@ function buildPrompt(cap: Capture, name: string, sanitize: boolean): string {
     `font sizes: ${cap.tokens.fontSizes.join(" | ")}`,
     `content max-width: ${cap.tokens.maxWidth ?? "none"}`,
     `dark mode: ${cap.tokens.darkMode}`,
+    `CSS custom properties: ${Object.entries(cap.tokens.cssVars).map(([name, value]) => `${name}: ${value}`).join(" | ") || "(none)"}`,
     "",
     "## Semantic outline",
     cap.outline.join("\n"),
