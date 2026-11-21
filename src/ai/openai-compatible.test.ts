@@ -80,6 +80,33 @@ test("calls onChunk once for each content delta", async () => {
   assert.deepEqual(chunks, ["one", "two"]);
 });
 
+test("throws the output-limit error when the stream finishes with length", async () => {
+  const response = streamResponse([
+    'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n',
+    'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n',
+    "data: [DONE]\n\n",
+  ]);
+
+  await assert.rejects(
+    withFetch(response, () => provider().complete({ system: "system", prompt: "prompt" })),
+    /hit its output limit/,
+  );
+});
+
+test("returns the text when the stream finishes with stop", async () => {
+  const response = streamResponse([
+    'data: {"choices":[{"delta":{"content":"done"}}]}\n\n',
+    'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+    "data: [DONE]\n\n",
+  ]);
+
+  const result = await withFetch(response, () =>
+    provider().complete({ system: "system", prompt: "prompt" }),
+  );
+
+  assert.equal(result, "done");
+});
+
 test("includes the HTTP status in non-success response errors", async () => {
   const response = new Response("service unavailable", { status: 503 });
 

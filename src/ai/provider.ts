@@ -37,6 +37,10 @@ export interface ProviderOptions {
   model?: string;
 }
 
+/** Shared by every provider so a truncated generation reads the same everywhere. */
+export const OUTPUT_LIMIT_MESSAGE =
+  "The model hit its output limit before finishing. Try a simpler page.";
+
 export class NoProviderError extends Error {
   constructor() {
     super(
