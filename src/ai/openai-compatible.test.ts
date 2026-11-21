@@ -80,6 +80,44 @@ test("calls onChunk once for each content delta", async () => {
   assert.deepEqual(chunks, ["one", "two"]);
 });
 
+async function capturedBody(p: OpenAICompatibleProvider): Promise<Record<string, unknown>> {
+  const originalFetch = globalThis.fetch;
+  let body: Record<string, unknown> = {};
+  globalThis.fetch = async (_url, init) => {
+    body = JSON.parse(String(init?.body));
+    return streamResponse(["data: [DONE]\n\n"]);
+  };
+  try {
+    await p.complete({ system: "system", prompt: "prompt", maxTokens: 1234 });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  return body;
+}
+
+test("sends max_tokens by default", async () => {
+  const body = await capturedBody(provider());
+
+  assert.equal(body.max_tokens, 1234);
+  assert.equal("max_completion_tokens" in body, false);
+});
+
+test("sends max_completion_tokens when configured for OpenAI reasoning models", async () => {
+  const body = await capturedBody(
+    new OpenAICompatibleProvider(
+      "openai",
+      "gpt-5",
+      "https://example.com/v1",
+      "test-key",
+      true,
+      "max_completion_tokens",
+    ),
+  );
+
+  assert.equal(body.max_completion_tokens, 1234);
+  assert.equal("max_tokens" in body, false);
+});
+
 test("includes the HTTP status in non-success response errors", async () => {
   const response = new Response("service unavailable", { status: 503 });
 

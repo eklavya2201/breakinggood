@@ -29,6 +29,8 @@ const CANDIDATES: Candidate[] = [
         m ?? "gpt-5",
         env("OPENAI_BASE_URL") ?? "https://api.openai.com/v1",
         env("OPENAI_API_KEY"),
+        true,
+        "max_completion_tokens",
       ),
   },
   {
