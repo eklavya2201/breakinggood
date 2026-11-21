@@ -1,6 +1,12 @@
 import { OUTPUT_LIMIT_MESSAGE, type CompleteRequest, type Provider } from "./provider.js";
 
 /**
+ * OpenAI's reasoning models (gpt-5, o-series) reject `max_tokens` on chat completions
+ * and want `max_completion_tokens`. Groq, OpenRouter, Ollama etc. still use `max_tokens`.
+ */
+export type TokenParam = "max_tokens" | "max_completion_tokens";
+
+/**
  * Works with any server speaking the OpenAI chat-completions dialect:
  * OpenAI, Groq, OpenRouter, Together, Ollama, LM Studio, vLLM…
  */
@@ -13,6 +19,7 @@ export class OpenAICompatibleProvider implements Provider {
     private baseUrl: string,
     private apiKey: string | undefined,
     supportsImages = true,
+    private tokenParam: TokenParam = "max_tokens",
   ) {
     this.supportsImages = supportsImages;
   }
@@ -32,7 +39,7 @@ export class OpenAICompatibleProvider implements Provider {
     const body = {
       model: this.model,
       stream: true,
-      max_tokens: req.maxTokens ?? 16000,
+      [this.tokenParam]: req.maxTokens ?? 16000,
       messages: [
         { role: "system", content: req.system },
         { role: "user", content: userContent },
