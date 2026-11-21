@@ -1,13 +1,17 @@
+
 import assert from "node:assert/strict";
 import test from "node:test";
 import { OpenAICompatibleProvider } from "./openai-compatible.js";
 
 function streamResponse(chunks: string[], status = 200): Response {
   const encoder = new TextEncoder();
+
   return new Response(
     new ReadableStream<Uint8Array>({
       start(controller) {
-        for (const chunk of chunks) controller.enqueue(encoder.encode(chunk));
+        for (const chunk of chunks) {
+          controller.enqueue(encoder.encode(chunk));
+        }
         controller.close();
       },
     }),
@@ -15,9 +19,13 @@ function streamResponse(chunks: string[], status = 200): Response {
   );
 }
 
-async function withFetch<T>(response: Response, run: () => Promise<T>): Promise<T> {
+async function withFetch<T>(
+  response: Response,
+  run: () => Promise<T>,
+): Promise<T> {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => response;
+
   try {
     return await run();
   } finally {
@@ -26,7 +34,12 @@ async function withFetch<T>(response: Response, run: () => Promise<T>): Promise<
 }
 
 function provider() {
-  return new OpenAICompatibleProvider("Test", "test-model", "https://example.com/v1", "test-key");
+  return new OpenAICompatibleProvider(
+    "Test",
+    "test-model",
+    "https://example.com/v1",
+    "test-key",
+  );
 }
 
 test("reassembles SSE data lines split across stream chunks", async () => {
@@ -66,6 +79,7 @@ test("calls onChunk once for each content delta", async () => {
     'data: {"choices":[{"delta":{"content":"two"}}]}\n\n',
     "data: [DONE]\n\n",
   ]);
+
   const chunks: string[] = [];
 
   const result = await withFetch(response, () =>
@@ -80,18 +94,56 @@ test("calls onChunk once for each content delta", async () => {
   assert.deepEqual(chunks, ["one", "two"]);
 });
 
-async function capturedBody(p: OpenAICompatibleProvider): Promise<Record<string, unknown>> {
+test("throws the output-limit error when the stream finishes with length", async () => {
+  const response = streamResponse([
+    'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n',
+    'data: {"choices":[{"delta":{},"finish_reason":"length"}]}\n\n',
+    "data: [DONE]\n\n",
+  ]);
+
+  await assert.rejects(
+    withFetch(response, () =>
+      provider().complete({ system: "system", prompt: "prompt" }),
+    ),
+    /hit its output limit/,
+  );
+});
+
+test("returns the text when the stream finishes with stop", async () => {
+  const response = streamResponse([
+    'data: {"choices":[{"delta":{"content":"done"}}]}\n\n',
+    'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+    "data: [DONE]\n\n",
+  ]);
+
+  const result = await withFetch(response, () =>
+    provider().complete({ system: "system", prompt: "prompt" }),
+  );
+
+  assert.equal(result, "done");
+});
+
+async function capturedBody(
+  p: OpenAICompatibleProvider,
+): Promise<Record<string, unknown>> {
   const originalFetch = globalThis.fetch;
   let body: Record<string, unknown> = {};
+
   globalThis.fetch = async (_url, init) => {
     body = JSON.parse(String(init?.body));
     return streamResponse(["data: [DONE]\n\n"]);
   };
+
   try {
-    await p.complete({ system: "system", prompt: "prompt", maxTokens: 1234 });
+    await p.complete({
+      system: "system",
+      prompt: "prompt",
+      maxTokens: 1234,
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }
+
   return body;
 }
 
@@ -119,10 +171,14 @@ test("sends max_completion_tokens when configured for OpenAI reasoning models", 
 });
 
 test("includes the HTTP status in non-success response errors", async () => {
-  const response = new Response("service unavailable", { status: 503 });
+  const response = new Response("service unavailable", {
+    status: 503,
+  });
 
   await assert.rejects(
-    withFetch(response, () => provider().complete({ system: "system", prompt: "prompt" })),
+    withFetch(response, () =>
+      provider().complete({ system: "system", prompt: "prompt" }),
+    ),
     /Test API error 503/,
   );
 });

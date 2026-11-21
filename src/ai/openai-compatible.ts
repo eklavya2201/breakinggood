@@ -1,4 +1,4 @@
-import type { CompleteRequest, Provider } from "./provider.js";
+import { OUTPUT_LIMIT_MESSAGE, type CompleteRequest, type Provider } from "./provider.js";
 
 /**
  * OpenAI's reasoning models (gpt-5, o-series) reject `max_tokens` on chat completions
@@ -62,6 +62,7 @@ export class OpenAICompatibleProvider implements Provider {
     // Parse the SSE stream.
     let full = "";
     let buffer = "";
+    let finishReason: string | undefined;
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     for (;;) {
@@ -77,15 +78,20 @@ export class OpenAICompatibleProvider implements Provider {
         if (data === "[DONE]") continue;
         try {
           const json = JSON.parse(data);
-          const delta: string | undefined = json.choices?.[0]?.delta?.content;
+          const choice = json.choices?.[0];
+          const delta: string | undefined = choice?.delta?.content;
           if (delta) {
             full += delta;
             req.onChunk?.(delta);
           }
+          if (choice?.finish_reason) finishReason = choice.finish_reason;
         } catch {
           /* ignore keep-alives */
         }
       }
+    }
+    if (finishReason === "length") {
+      throw new Error(OUTPUT_LIMIT_MESSAGE);
     }
     return full;
   }

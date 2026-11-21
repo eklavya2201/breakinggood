@@ -1,4 +1,4 @@
-import type { CompleteRequest, Provider } from "./provider.js";
+import { OUTPUT_LIMIT_MESSAGE, type CompleteRequest, type Provider } from "./provider.js";
 
 export class GeminiProvider implements Provider {
   readonly name = "gemini";
@@ -30,8 +30,11 @@ export class GeminiProvider implements Provider {
       throw new Error(`Gemini API error ${res.status}: ${text.slice(0, 500)}`);
     }
     const json = (await res.json()) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
+      candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
     };
+    if (json.candidates?.[0]?.finishReason === "MAX_TOKENS") {
+      throw new Error(OUTPUT_LIMIT_MESSAGE);
+    }
     const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
     req.onChunk?.(text);
     return text;

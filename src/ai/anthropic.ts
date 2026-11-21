@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { CompleteRequest, Provider } from "./provider.js";
+import { OUTPUT_LIMIT_MESSAGE, type CompleteRequest, type Provider } from "./provider.js";
 
 export class AnthropicProvider implements Provider {
   readonly name = "anthropic";
@@ -40,7 +40,7 @@ export class AnthropicProvider implements Provider {
       );
     }
     if (final.stop_reason === "max_tokens") {
-      throw new Error("The model hit its output limit before finishing. Try a simpler page.");
+      throw new Error(OUTPUT_LIMIT_MESSAGE);
     }
     return final.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
