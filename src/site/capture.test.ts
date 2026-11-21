@@ -1,6 +1,15 @@
+
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CHALLENGE_MARKERS, extractRootCssVars, isChallengePage } from "./capture.js";
+
+import {
+  CHALLENGE_MARKERS,
+  dismissCookieBanners,
+  extractRootCssVars,
+  isChallengePage,
+} from "./capture.js";
+
+import type { Page } from "playwright-core";
 
 test("returns the matched challenge marker from the page title", () => {
   for (const marker of CHALLENGE_MARKERS) {
@@ -9,8 +18,14 @@ test("returns the matched challenge marker from the page title", () => {
 });
 
 test("detects challenge markers in short body text case-insensitively", () => {
-  assert.equal(isChallengePage("Example site", "Please VERIFY YOU ARE HUMAN to continue."), "Verify you are human");
-  assert.equal(isChallengePage("Example site", "Enable JavaScript and cookies to proceed."), "Enable JavaScript and cookies");
+  assert.equal(
+    isChallengePage("Example site", "Please VERIFY YOU ARE HUMAN to continue."),
+    "Verify you are human"
+  );
+  assert.equal(
+    isChallengePage("Example site", "Enable JavaScript and cookies to proceed."),
+    "Enable JavaScript and cookies"
+  );
 });
 
 test("does not flag a long ordinary page that mentions challenge phrases", () => {
@@ -20,8 +35,14 @@ test("does not flag a long ordinary page that mentions challenge phrases", () =>
 });
 
 test("detects Cloudflare challenge markup", () => {
-  assert.equal(isChallengePage("Example site", "Ordinary page", '<form id="challenge-form"></form>'), "Cloudflare challenge markup");
-  assert.equal(isChallengePage("Example site", "Ordinary page", '<div class="cf-chl-widget"></div>'), "Cloudflare challenge markup");
+  assert.equal(
+    isChallengePage("Example site", "Ordinary page", '<form id="challenge-form"></form>'),
+    "Cloudflare challenge markup"
+  );
+  assert.equal(
+    isChallengePage("Example site", "Ordinary page", '<div class="cf-chl-widget"></div>'),
+    "Cloudflare challenge markup"
+  );
 });
 
 test("detects 403 and 503 navigation responses", () => {
@@ -32,6 +53,84 @@ test("detects 403 and 503 navigation responses", () => {
 test("does not flag ordinary pages", () => {
   assert.equal(isChallengePage("Example site", "Welcome to our website."), undefined);
   assert.equal(isChallengePage("", ""), undefined);
+});
+
+function cookiePage(options: { visibleSelector?: string; visibleLabel?: string }) {
+  const selectorAttempts: string[] = [];
+  const labelAttempts: { name: string; exact: boolean }[] = [];
+  const clicks: string[] = [];
+
+  const page = {
+    locator(selector: string) {
+      const locator = {
+        async isVisible() {
+          selectorAttempts.push(selector);
+          return selector === options.visibleSelector;
+        },
+        async click() {
+          clicks.push(selector);
+        },
+      };
+      return { ...locator, first: () => locator };
+    },
+    getByRole(_role: string, query: { name: string; exact: boolean }) {
+      const locator = {
+        async isVisible() {
+          labelAttempts.push(query);
+          return query.name === options.visibleLabel;
+        },
+        async click() {
+          clicks.push(query.name);
+        },
+      };
+      return { ...locator, first: () => locator };
+    },
+    async waitForTimeout() {},
+  } as unknown as Page;
+
+  return { page, selectorAttempts, labelAttempts, clicks };
+}
+
+test("prefers known consent-tool selectors before button labels", async () => {
+  const { page, selectorAttempts, labelAttempts, clicks } = cookiePage({
+    visibleSelector: "#onetrust-accept-btn-handler",
+    visibleLabel: "Accept all",
+  });
+
+  await dismissCookieBanners(page);
+
+  assert.deepEqual(clicks, ["#onetrust-accept-btn-handler"]);
+  assert.deepEqual(selectorAttempts, ["#onetrust-accept-btn-handler"]);
+  assert.deepEqual(labelAttempts, []);
+});
+
+test("dismisses cookie banners with supported international labels", async () => {
+  for (const label of [
+    "Alle akzeptieren",
+    "Akzeptieren",
+    "Tout accepter",
+    "Accepter",
+    "Aceptar todo",
+    "Aceptar",
+    "Accetta tutto",
+    "Aceitar",
+  ]) {
+    const { page, clicks, labelAttempts } = cookiePage({ visibleLabel: label });
+
+    await dismissCookieBanners(page);
+
+    assert.deepEqual(clicks, [label]);
+    assert.ok(labelAttempts.some((attempt) => attempt.name === label && attempt.exact));
+  }
+});
+
+test("matches short OK labels exactly", async () => {
+  const { page, labelAttempts, clicks } = cookiePage({ visibleLabel: "OK" });
+
+  await dismissCookieBanners(page);
+
+  assert.deepEqual(clicks, ["OK"]);
+  assert.ok(labelAttempts.some((attempt) => attempt.name === "OK" && attempt.exact));
 });
 
 test("captures relevant custom properties from :root and html rules", () => {

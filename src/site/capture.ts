@@ -242,13 +242,50 @@ async function tiledScreenshots(page: Page, width: number, tileHeight: number, m
   return out;
 }
 
-async function dismissCookieBanners(page: Page): Promise<void> {
-  const labels = ["Accept all", "Accept All", "Accept", "I agree", "Agree", "Got it", "OK", "Allow all", "Accept cookies"];
-  for (const l of labels) {
+export async function dismissCookieBanners(page: Page): Promise<void> {
+  const selectors = [
+    "#onetrust-accept-btn-handler",
+    "#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll",
+    ".fc-cta-consent",
+    '[data-testid="uc-accept-all-button"]',
+  ];
+  for (const selector of selectors) {
     try {
-      const btn = page.getByRole("button", { name: l, exact: false }).first();
-      if (await btn.isVisible({ timeout: 300 })) {
-        await btn.click({ timeout: 1000 });
+      const button = page.locator(selector).first();
+      if (await button.isVisible({ timeout: 300 })) {
+        await button.click({ timeout: 1000 });
+        await page.waitForTimeout(300);
+        return;
+      }
+    } catch {
+      /* no such button */
+    }
+  }
+
+  const labels = [
+    "Accept all",
+    "Accept All",
+    "Accept",
+    "I agree",
+    "Agree",
+    "Got it",
+    "OK",
+    "Allow all",
+    "Accept cookies",
+    "Alle akzeptieren",
+    "Akzeptieren",
+    "Tout accepter",
+    "Accepter",
+    "Aceptar todo",
+    "Aceptar",
+    "Accetta tutto",
+    "Aceitar",
+  ];
+  for (const label of labels) {
+    try {
+      const button = page.getByRole("button", { name: label, exact: true }).first();
+      if (await button.isVisible({ timeout: 300 })) {
+        await button.click({ timeout: 1000 });
         await page.waitForTimeout(300);
         return;
       }
