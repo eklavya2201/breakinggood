@@ -114,6 +114,25 @@ function nodePackageManager(dir: string, pkg: Record<string, unknown>): string {
 }
 
 /** Heuristic plan. The AI planner refines it when the heuristics are unsure. */
+/** Default dev-server ports by dependency, checked in order. First match wins. */
+const NODE_PORTS: [string[], number][] = [
+  [["next", "nuxt", "nuxt3", "@remix-run/dev", "@remix-run/react", "react-scripts"], 3000],
+  [["vite", "@sveltejs/kit"], 5173],
+  [["astro"], 4321],
+  [["@angular/core", "@angular/cli"], 4200],
+  [["gatsby"], 8000],
+  [["expo"], 8081],
+];
+
+/** Guess the dev-server port of a Node project from its dependencies. */
+export function nodeDefaultPort(pkg: Record<string, unknown>): number | undefined {
+  const deps = {
+    ...((pkg.dependencies ?? {}) as Record<string, unknown>),
+    ...((pkg.devDependencies ?? {}) as Record<string, unknown>),
+  };
+  return NODE_PORTS.find(([names]) => names.some((n) => n in deps))?.[1];
+}
+
 export function heuristicPlan(f: RepoFacts): RunPlan {
   const plan: RunPlan = { stack: f.stack, install: [], run: null, ports: [], reasons: [], confident: false };
   const d = f.dir;
@@ -137,6 +156,8 @@ export function heuristicPlan(f: RepoFacts): RunPlan {
         plan.run = { cmd: "node", args: [pkg.main], label: `node ${pkg.main}` };
         plan.reasons.push(`no dev/start script; falling back to package.json "main"`);
       }
+      const port = nodeDefaultPort(pkg);
+      if (port) plan.ports.push(port);
       if (scripts.build && !scripts.dev && scripts.start) {
         plan.install.push({ cmd: pm, args: pm === "npm" ? ["run", "build"] : ["build"], label: `${pm} build` });
         plan.reasons.push(`"start" without "dev" → building first`);
